@@ -34,12 +34,7 @@ async function extractReceiptData(imageBase64, mediaType) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ image: imageBase64, mediaType })
   });
-  const data = await response.json();
-  return data;
-}
-  const data = await response.json();
-  const text = data.content?.find(b => b.type === "text")?.text || "{}";
-  return JSON.parse(text.replace(/```json|```/g, "").trim());
+  return await response.json();
 }
 
 function Field({ label, value, onChange, placeholder, mono, style }) {
@@ -105,7 +100,13 @@ export default function App() {
       const dataUrl = e.target.result;
       try {
         const extracted = await extractReceiptData(dataUrl.split(",")[1], file.type);
-        setForm(f => ({ ...f, empresa: extracted.empresa||f.empresa, cnpj: extracted.cnpj||f.cnpj, data: formatDate(extracted.data)||f.data, valor: extracted.valor||f.valor, imageUrl: dataUrl }));
+        setForm(f => ({ ...f,
+          empresa: extracted.empresa || f.empresa,
+          cnpj: extracted.cnpj || f.cnpj,
+          data: formatDate(extracted.data) || f.data,
+          valor: extracted.valor || f.valor,
+          imageUrl: dataUrl
+        }));
       } catch { setForm(f => ({ ...f, imageUrl: dataUrl })); }
       setLoading(false);
     };
