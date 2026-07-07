@@ -10,15 +10,25 @@ async function kv(method, ...args) {
 }
 
 export default async function handler(req, res) {
-  if (req.method === 'GET') {
-    const raw = await kv('get', 'expenses');
-    const expenses = raw ? JSON.parse(raw) : [];
-    return res.status(200).json(expenses);
+  const { type } = req.query;
+
+  if (type === 'users') {
+    if (req.method === 'GET') {
+      const raw = await kv('get', 'users');
+      return res.status(200).json(raw ? JSON.parse(raw) : []);
+    }
+    if (req.method === 'POST') {
+      await kv('set', 'users', JSON.stringify(req.body));
+      return res.status(200).json({ ok: true });
+    }
   }
 
+  if (req.method === 'GET') {
+    const raw = await kv('get', 'expenses');
+    return res.status(200).json(raw ? JSON.parse(raw) : []);
+  }
   if (req.method === 'POST') {
-    const expenses = req.body;
-    await kv('set', 'expenses', JSON.stringify(expenses));
+    await kv('set', 'expenses', JSON.stringify(req.body));
     return res.status(200).json({ ok: true });
   }
 
