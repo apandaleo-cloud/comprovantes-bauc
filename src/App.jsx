@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 
 const CATEGORIES = ["Alimentação","Transporte","Estacionamento","Hospedagem","Material de escritório","Reunião","Treinamento","Saúde","Tecnologia","Outros"];
 const MONTHS_PT = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
@@ -37,6 +37,19 @@ async function extractReceiptData(imageBase64, mediaType) {
   return await response.json();
 }
 
+async function loadExpenses() {
+  const res = await fetch("/api/expenses");
+  return await res.json();
+}
+
+async function saveExpenses(expenses) {
+  await fetch("/api/expenses", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(expenses)
+  });
+}
+
 function Field({ label, value, onChange, placeholder, mono, style }) {
   return (
     <div style={style}>
@@ -49,9 +62,8 @@ function Field({ label, value, onChange, placeholder, mono, style }) {
 
 export default function App() {
   const now = new Date();
-  const [expenses, setExpenses] = useState([
-    { id:1, empresa:"HC Estacionamentos LTDA", cnpj:"06.201.722/0001-90", data:"25/06/2026", valor:"35.00", motivo:"Reunião EHTS", imageUrl:null }
-  ]);
+  const [expenses, setExpenses] = useState([]);
+  const [loadingData, setLoadingData] = useState(true);
   const [modal, setModal] = useState(null);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState({ empresa:"", cnpj:"", data:"", valor:"", motivo:"", imageUrl:null });
@@ -62,6 +74,18 @@ export default function App() {
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
   const fileRef = useRef();
+
+  useEffect(() => {
+    loadExpenses().then(data => {
+      setExpenses(Array.isArray(data) ? data : []);
+      setLoadingData(false);
+    }).catch(() => setLoadingData(false));
+  }, []);
+
+  const updateExpenses = (newExpenses) => {
+    setExpenses(newExpenses);
+    saveExpenses(newExpenses);
+  };
 
   const applyPeriodFilter = (list) => {
     if (periodMode === "all") return list;
@@ -115,6 +139,15 @@ export default function App() {
 
   const Pill = ({ mode, label }) => (
     <button onClick={() => setPeriodMode(mode)} style={{ padding:"6px 14px", borderRadius:20, fontSize:12, fontWeight:600, cursor:"pointer", border:"none", background: periodMode===mode ? "#1A1A1A" : "#EBEBEB", color: periodMode===mode ? "#C8F135" : "#555" }}>{label}</button>
+  );
+
+  if (loadingData) return (
+    <div style={{ minHeight:"100vh", background:"#F7F7F5", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"system-ui" }}>
+      <div style={{ textAlign:"center", color:"#888" }}>
+        <div style={{ fontSize:36, marginBottom:12 }}>🧾</div>
+        <div style={{ fontWeight:600 }}>Carregando comprovantes...</div>
+      </div>
+    </div>
   );
 
   return (
@@ -194,7 +227,7 @@ export default function App() {
                 <td style={{ padding:"14px 16px" }}>{exp.motivo ? <span style={{ background:"#C8F135", color:"#1A1A1A", borderRadius:6, padding:"3px 10px", fontSize:12, fontWeight:600 }}>{exp.motivo}</span> : <span style={{ color:"#ccc", fontSize:12 }}>Sem motivo</span>}</td>
                 <td style={{ padding:"14px 16px", borderRadius:"0 12px 12px 0", textAlign:"center" }}>
                   <button onClick={() => openEdit(exp)} style={{ background:"none", border:"none", cursor:"pointer", fontSize:16, padding:"4px 8px" }}>✏️</button>
-                  <button onClick={() => setExpenses(es => es.filter(e => e.id !== exp.id))} style={{ background:"none", border:"none", cursor:"pointer", fontSize:16, padding:"4px 8px" }}>🗑️</button>
+                  <button onClick={() => updateExpenses(expenses.filter(e => e.id !== exp.id))} style={{ background:"none", border:"none", cursor:"pointer", fontSize:16, padding:"4px 8px" }}>🗑️</button>
                 </td>
               </tr>
             ))}</tbody>
@@ -241,8 +274,14 @@ export default function App() {
             </div>
             <div style={{ padding:"20px 24px 24px", display:"flex", gap:10, justifyContent:"flex-end" }}>
               <button onClick={closeModal} style={{background:"#F0F0F0",border:"none",borderRadius:10,padding:"10px 20px",fontWeight:600,cursor:"pointer",fontSize:14}}>Cancelar</button>
-              <button onClick={()=>{if(!form.empresa&&!form.valor)return;if(modal==="edit")setExpenses(es=>es.map(e=>e.id===editingId?{...form,id:editingId}:e));else setExpenses(es=>[...es,{...form,id:Date.now()}]);closeModal();}}
-                style={{background:"#1A1A1A",color:"#C8F135",border:"none",borderRadius:10,padding:"10px 24px",fontWeight:700,cursor:"pointer",fontSize:14}}>
+              <button onClick={()=>{
+                if(!form.empresa&&!form.valor)return;
+                let newExpenses;
+                if(modal==="edit") newExpenses = expenses.map(e=>e.id===editingId?{...form,id:editingId}:e);
+                else newExpenses = [...expenses,{...form,id:Date.now()}];
+                updateExpenses(newExpenses);
+                closeModal();
+              }} style={{background:"#1A1A1A",color:"#C8F135",border:"none",borderRadius:10,padding:"10px 24px",fontWeight:700,cursor:"pointer",fontSize:14}}>
                 {modal==="edit"?"Salvar alterações":"Adicionar"}
               </button>
             </div>
