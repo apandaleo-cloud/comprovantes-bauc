@@ -29,7 +29,7 @@ const parseDate = (str) => {
 };
 
 async function extractReceiptData(imageBase64, mediaType) {
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
+  const response = await fetch("/api/extract", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
