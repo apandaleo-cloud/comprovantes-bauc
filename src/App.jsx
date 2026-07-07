@@ -139,12 +139,101 @@ export default function App() {
   const total = filtered.reduce((s, e) => s + parseFloat(e.valor || 0), 0);
   const totalAll = expenses.reduce((s, e) => s + parseFloat(e.valor || 0), 0);
 
+  // Totais por responsável
+  const totaisPorResponsavel = users.map(u => ({
+    nome: u,
+    total: filtered.filter(e => e.responsavel === u).reduce((s, e) => s + parseFloat(e.valor || 0), 0),
+    count: filtered.filter(e => e.responsavel === u).length
+  })).filter(u => u.count > 0);
+
   const periodLabel = () => {
     if (periodMode === "all") return "Todos os períodos";
     if (periodMode === "thisMonth") return MONTHS_PT[now.getMonth()] + " " + now.getFullYear();
     if (periodMode === "lastMonth") { const lm = new Date(now.getFullYear(), now.getMonth()-1, 1); return MONTHS_PT[lm.getMonth()] + " " + lm.getFullYear(); }
     if (periodMode === "custom" && customFrom && customTo) return customFrom.split("-").reverse().join("/") + " → " + customTo.split("-").reverse().join("/");
     return "Período personalizado";
+  };
+
+  const gerarPDF = () => {
+    const dataGeracao = new Date().toLocaleString("pt-BR");
+    const filtroResp = filterUser || "Todos";
+    const periodo = periodLabel();
+
+    const linhas = filtered.map(e => `
+      <tr>
+        <td>${e.responsavel || "—"}</td>
+        <td>${e.empresa || "—"}</td>
+        <td style="font-family:monospace;font-size:11px">${e.cnpj || "—"}</td>
+        <td>${e.data || "—"}</td>
+        <td style="text-align:right;font-weight:600">${formatCurrency(e.valor)}</td>
+        <td>${e.motivo || "—"}</td>
+      </tr>
+    `).join("");
+
+    const totaisLinhas = totaisPorResponsavel.map(u => `
+      <tr>
+        <td><strong>${u.nome}</strong></td>
+        <td>${u.count} comprovante${u.count !== 1 ? "s" : ""}</td>
+        <td style="text-align:right;font-weight:700;color:#1A1A1A">${formatCurrency(u.total)}</td>
+      </tr>
+    `).join("");
+
+    const html = `
+      <!DOCTYPE html>
+      <html lang="pt-BR">
+      <head>
+        <meta charset="UTF-8"/>
+        <title>Relatório de Comprovantes</title>
+        <style>
+          * { margin:0; padding:0; box-sizing:border-box; }
+          body { font-family: Arial, sans-serif; font-size: 13px; color: #1A1A1A; padding: 32px; }
+          h1 { font-size: 22px; font-weight: 800; margin-bottom: 4px; }
+          .subtitle { color: #888; font-size: 12px; margin-bottom: 24px; }
+          .info { display: flex; gap: 32px; margin-bottom: 24px; background: #F7F7F5; padding: 14px 18px; border-radius: 8px; }
+          .info div { font-size: 12px; color: #555; }
+          .info strong { display: block; font-size: 14px; color: #1A1A1A; margin-top: 2px; }
+          table { width: 100%; border-collapse: collapse; margin-bottom: 24px; }
+          th { background: #1A1A1A; color: #C8F135; padding: 10px 12px; text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; }
+          th:last-child { text-align: right; }
+          td { padding: 10px 12px; border-bottom: 1px solid #EBEBEB; font-size: 12px; vertical-align: middle; }
+          tr:last-child td { border-bottom: none; }
+          tr:nth-child(even) { background: #FAFAFA; }
+          .totais-table th { background: #333; }
+          .total-geral { text-align: right; font-size: 15px; font-weight: 800; margin-top: 8px; padding: 12px 18px; background: #1A1A1A; color: #C8F135; border-radius: 8px; }
+          h2 { font-size: 14px; margin-bottom: 10px; color: #555; text-transform: uppercase; letter-spacing: 0.08em; }
+          @media print { body { padding: 16px; } }
+        </style>
+      </head>
+      <body>
+        <h1>Relatório de Comprovantes Fiscais</h1>
+        <p class="subtitle">Gerado em ${dataGeracao}</p>
+        <div class="info">
+          <div>Período<strong>${periodo}</strong></div>
+          <div>Responsável<strong>${filtroResp}</strong></div>
+          <div>Total de comprovantes<strong>${filtered.length}</strong></div>
+        </div>
+        ${totaisPorResponsavel.length > 0 ? `
+          <h2>Totais por responsável</h2>
+          <table class="totais-table" style="margin-bottom:24px">
+            <thead><tr><th>Responsável</th><th>Comprovantes</th><th style="text-align:right">Total</th></tr></thead>
+            <tbody>${totaisLinhas}</tbody>
+          </table>
+        ` : ""}
+        <h2>Comprovantes</h2>
+        <table>
+          <thead><tr><th>Responsável</th><th>Empresa</th><th>CNPJ</th><th>Data</th><th style="text-align:right">Valor</th><th>Motivo</th></tr></thead>
+          <tbody>${linhas}</tbody>
+        </table>
+        <div class="total-geral">Total geral: ${formatCurrency(total)}</div>
+      </body>
+      </html>
+    `;
+
+    const win = window.open("", "_blank");
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+    setTimeout(() => win.print(), 500);
   };
 
   const openAdd = () => { setForm({ empresa:"", cnpj:"", data:"", valor:"", motivo:"", responsavel:"", imageUrl:null }); setEditingId(null); setModal("add"); };
@@ -192,7 +281,14 @@ export default function App() {
           <div style={{ color:"#C8F135", fontSize:11, fontWeight:700, letterSpacing:"0.15em", textTransform:"uppercase", marginBottom:2 }}>Gestão de Despesas</div>
           <div style={{ color:"#fff", fontSize:22, fontWeight:700, letterSpacing:"-0.02em" }}>Comprovantes Fiscais</div>
         </div>
-        <button onClick={openAdd} style={{ background:"#C8F135", color:"#1A1A1A", border:"none", borderRadius:10, padding:"10px 18px", fontWeight:700, fontSize:14, cursor:"pointer" }}>+ Novo</button>
+        <div style={{ display:"flex", gap:10 }}>
+          {filtered.length > 0 && (
+            <button onClick={gerarPDF} style={{ background:"transparent", color:"#C8F135", border:"1.5px solid #C8F135", borderRadius:10, padding:"10px 18px", fontWeight:700, fontSize:14, cursor:"pointer" }}>
+              ⬇ PDF
+            </button>
+          )}
+          <button onClick={openAdd} style={{ background:"#C8F135", color:"#1A1A1A", border:"none", borderRadius:10, padding:"10px 18px", fontWeight:700, fontSize:14, cursor:"pointer" }}>+ Novo</button>
+        </div>
       </header>
 
       <div style={{ background:"#fff", borderBottom:"1px solid #EBEBEB", padding:"16px 24px" }}>
@@ -239,6 +335,19 @@ export default function App() {
               style={{ border:"1.5px solid #EBEBEB", borderRadius:8, padding:"8px 14px", fontSize:13, outline:"none", width:180, background:"#F7F7F5" }} />
           </div>
         </div>
+
+        {totaisPorResponsavel.length > 0 && (
+          <div style={{ marginTop:16, paddingTop:16, borderTop:"1px solid #EBEBEB", display:"flex", gap:12, flexWrap:"wrap" }}>
+            {totaisPorResponsavel.map(u => (
+              <div key={u.nome} onClick={() => setFilterUser(filterUser === u.nome ? "" : u.nome)}
+                style={{ background: filterUser === u.nome ? "#1A1A1A" : "#F7F7F5", border:"1.5px solid "+ (filterUser === u.nome ? "#1A1A1A" : "#EBEBEB"), borderRadius:10, padding:"10px 16px", cursor:"pointer", transition:"all 0.15s" }}>
+                <div style={{ fontSize:11, fontWeight:700, color: filterUser === u.nome ? "#C8F135" : "#888", textTransform:"uppercase", letterSpacing:"0.08em" }}>{u.nome}</div>
+                <div style={{ fontSize:18, fontWeight:800, color: filterUser === u.nome ? "#fff" : "#1A1A1A", marginTop:2 }}>{formatCurrency(u.total)}</div>
+                <div style={{ fontSize:11, color: filterUser === u.nome ? "#aaa" : "#999", marginTop:1 }}>{u.count} comprovante{u.count !== 1 ? "s" : ""}</div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div style={{ padding:"24px", overflowX:"auto" }}>
@@ -256,9 +365,7 @@ export default function App() {
             <tbody>{filtered.map(exp => (
               <tr key={exp.id} style={{ background:"#fff", boxShadow:"0 1px 3px rgba(0,0,0,0.06)" }}>
                 <td style={{ padding:"14px 16px", borderRadius:"12px 0 0 12px" }}>
-                  {exp.responsavel ? (
-                    <span style={{ background:"#1A1A1A", color:"#C8F135", borderRadius:6, padding:"3px 10px", fontSize:12, fontWeight:600 }}>{exp.responsavel}</span>
-                  ) : <span style={{ color:"#ccc", fontSize:12 }}>—</span>}
+                  {exp.responsavel ? <span style={{ background:"#1A1A1A", color:"#C8F135", borderRadius:6, padding:"3px 10px", fontSize:12, fontWeight:600 }}>{exp.responsavel}</span> : <span style={{ color:"#ccc", fontSize:12 }}>—</span>}
                 </td>
                 <td style={{ padding:"14px 16px", fontWeight:600, fontSize:14 }}>
                   <div style={{ display:"flex", alignItems:"center", gap:10 }}>
