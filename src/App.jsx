@@ -84,7 +84,8 @@ export default function App() {
 
   const updateExpenses = (newExpenses) => {
     setExpenses(newExpenses);
-    saveExpenses(newExpenses);
+    const toSave = newExpenses.map(({ imageUrl, ...rest }) => rest);
+    saveExpenses(toSave);
   };
 
   const applyPeriodFilter = (list) => {
