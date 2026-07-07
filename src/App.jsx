@@ -23,9 +23,12 @@ const formatDate = (val) => {
 
 const parseDate = (str) => {
   if (!str) return null;
-  const p = str.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-  if (!p) return null;
-  return new Date(parseInt(p[3]), parseInt(p[2]) - 1, parseInt(p[1]), 12, 0, 0);
+  const p1 = str.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (p1) return new Date(parseInt(p1[3]), parseInt(p1[2]) - 1, parseInt(p1[1]), 12, 0, 0);
+  const months = { JAN:0,FEV:1,MAR:2,ABR:3,MAI:4,JUN:5,JUL:6,AGO:7,SET:8,OUT:9,NOV:10,DEZ:11,FEB:1,APR:3,MAY:4,AUG:7,SEP:8,OCT:9,DEC:11 };
+  const p2 = str.match(/^(\d{2})\/([A-Za-z]{3})\/(\d{4})$/);
+  if (p2) return new Date(parseInt(p2[3]), months[p2[2].toUpperCase()], parseInt(p2[1]), 12, 0, 0);
+  return null;
 };
 
 async function extractReceiptData(imageBase64, mediaType) {
