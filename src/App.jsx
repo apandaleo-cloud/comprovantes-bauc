@@ -53,6 +53,19 @@ async function saveExpenses(expenses) {
   });
 }
 
+async function loadUsers() {
+  const res = await fetch("/api/expenses?type=users");
+  return await res.json();
+}
+
+async function saveUsers(users) {
+  await fetch("/api/expenses?type=users", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(users)
+  });
+}
+
 function Field({ label, value, onChange, placeholder, mono, style }) {
   return (
     <div style={style}>
@@ -66,21 +79,26 @@ function Field({ label, value, onChange, placeholder, mono, style }) {
 export default function App() {
   const now = new Date();
   const [expenses, setExpenses] = useState([]);
+  const [users, setUsers] = useState([]);
   const [loadingData, setLoadingData] = useState(true);
   const [modal, setModal] = useState(null);
   const [editingId, setEditingId] = useState(null);
-  const [form, setForm] = useState({ empresa:"", cnpj:"", data:"", valor:"", motivo:"", imageUrl:null });
+  const [form, setForm] = useState({ empresa:"", cnpj:"", data:"", valor:"", motivo:"", responsavel:"", imageUrl:null });
   const [loading, setLoading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [filterMotivo, setFilterMotivo] = useState("");
+  const [filterUser, setFilterUser] = useState("");
   const [periodMode, setPeriodMode] = useState("thisMonth");
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
+  const [newUserName, setNewUserName] = useState("");
+  const [showAddUser, setShowAddUser] = useState(false);
   const fileRef = useRef();
 
   useEffect(() => {
-    loadExpenses().then(data => {
-      setExpenses(Array.isArray(data) ? data : []);
+    Promise.all([loadExpenses(), loadUsers()]).then(([exp, usr]) => {
+      setExpenses(Array.isArray(exp) ? exp : []);
+      setUsers(Array.isArray(usr) ? usr : []);
       setLoadingData(false);
     }).catch(() => setLoadingData(false));
   }, []);
@@ -89,6 +107,17 @@ export default function App() {
     setExpenses(newExpenses);
     const toSave = newExpenses.map(({ imageUrl, ...rest }) => rest);
     saveExpenses(toSave);
+  };
+
+  const handleAddUser = () => {
+    const name = newUserName.trim();
+    if (!name || users.includes(name)) return;
+    const newUsers = [...users, name].sort();
+    setUsers(newUsers);
+    saveUsers(newUsers);
+    setForm(f => ({ ...f, responsavel: name }));
+    setNewUserName("");
+    setShowAddUser(false);
   };
 
   const applyPeriodFilter = (list) => {
@@ -103,7 +132,9 @@ export default function App() {
     return list;
   };
 
-  const baseList = filterMotivo ? expenses.filter(e => e.motivo?.toLowerCase().includes(filterMotivo.toLowerCase())) : expenses;
+  let baseList = expenses;
+  if (filterMotivo) baseList = baseList.filter(e => e.motivo?.toLowerCase().includes(filterMotivo.toLowerCase()));
+  if (filterUser) baseList = baseList.filter(e => e.responsavel === filterUser);
   const filtered = applyPeriodFilter(baseList);
   const total = filtered.reduce((s, e) => s + parseFloat(e.valor || 0), 0);
   const totalAll = expenses.reduce((s, e) => s + parseFloat(e.valor || 0), 0);
@@ -116,9 +147,9 @@ export default function App() {
     return "Período personalizado";
   };
 
-  const openAdd = () => { setForm({ empresa:"", cnpj:"", data:"", valor:"", motivo:"", imageUrl:null }); setEditingId(null); setModal("add"); };
+  const openAdd = () => { setForm({ empresa:"", cnpj:"", data:"", valor:"", motivo:"", responsavel:"", imageUrl:null }); setEditingId(null); setModal("add"); };
   const openEdit = (exp) => { setForm({ ...exp }); setEditingId(exp.id); setModal("edit"); };
-  const closeModal = () => { setModal(null); setEditingId(null); };
+  const closeModal = () => { setModal(null); setEditingId(null); setShowAddUser(false); setNewUserName(""); };
 
   const handleFile = useCallback(async (file) => {
     if (!file || !file.type.startsWith("image/")) return;
@@ -184,7 +215,7 @@ export default function App() {
             </div>
           </div>
         )}
-        <div style={{ display:"flex", gap:32, alignItems:"center", flexWrap:"wrap" }}>
+        <div style={{ display:"flex", gap:24, alignItems:"center", flexWrap:"wrap" }}>
           <div>
             <div style={{ fontSize:11, color:"#888", fontWeight:600, textTransform:"uppercase", letterSpacing:"0.1em" }}>Total — {periodLabel()}</div>
             <div style={{ fontSize:26, fontWeight:800, letterSpacing:"-0.02em" }}>{formatCurrency(total)}</div>
@@ -198,9 +229,14 @@ export default function App() {
             <div style={{ fontSize:11, color:"#888", fontWeight:600, textTransform:"uppercase", letterSpacing:"0.1em" }}>Comprovantes</div>
             <div style={{ fontSize:26, fontWeight:800 }}>{filtered.length}</div>
           </div>
-          <div style={{ marginLeft:"auto" }}>
+          <div style={{ marginLeft:"auto", display:"flex", gap:10, flexWrap:"wrap" }}>
+            <select value={filterUser} onChange={e => setFilterUser(e.target.value)}
+              style={{ border:"1.5px solid #EBEBEB", borderRadius:8, padding:"8px 14px", fontSize:13, outline:"none", background:"#F7F7F5", color: filterUser ? "#1A1A1A" : "#aaa" }}>
+              <option value="">Todos os responsáveis</option>
+              {users.map(u => <option key={u} value={u}>{u}</option>)}
+            </select>
             <input placeholder="Filtrar por motivo..." value={filterMotivo} onChange={e => setFilterMotivo(e.target.value)}
-              style={{ border:"1.5px solid #EBEBEB", borderRadius:8, padding:"8px 14px", fontSize:13, outline:"none", width:200, background:"#F7F7F5" }} />
+              style={{ border:"1.5px solid #EBEBEB", borderRadius:8, padding:"8px 14px", fontSize:13, outline:"none", width:180, background:"#F7F7F5" }} />
           </div>
         </div>
       </div>
@@ -215,11 +251,16 @@ export default function App() {
         ) : (
           <table style={{ width:"100%", borderCollapse:"separate", borderSpacing:"0 8px" }}>
             <thead><tr style={{ fontSize:11, color:"#888", textTransform:"uppercase", letterSpacing:"0.08em" }}>
-              {["Empresa","CNPJ","Data","Valor","Motivo","Ações"].map((h,i) => <th key={h} style={{ textAlign:i===3?"right":i===5?"center":"left", padding:"0 16px 8px", fontWeight:600 }}>{h}</th>)}
+              {["Responsável","Empresa","CNPJ","Data","Valor","Motivo","Ações"].map((h,i) => <th key={h} style={{ textAlign:i===4?"right":i===6?"center":"left", padding:"0 16px 8px", fontWeight:600 }}>{h}</th>)}
             </tr></thead>
             <tbody>{filtered.map(exp => (
               <tr key={exp.id} style={{ background:"#fff", boxShadow:"0 1px 3px rgba(0,0,0,0.06)" }}>
-                <td style={{ padding:"14px 16px", borderRadius:"12px 0 0 12px", fontWeight:600, fontSize:14 }}>
+                <td style={{ padding:"14px 16px", borderRadius:"12px 0 0 12px" }}>
+                  {exp.responsavel ? (
+                    <span style={{ background:"#1A1A1A", color:"#C8F135", borderRadius:6, padding:"3px 10px", fontSize:12, fontWeight:600 }}>{exp.responsavel}</span>
+                  ) : <span style={{ color:"#ccc", fontSize:12 }}>—</span>}
+                </td>
+                <td style={{ padding:"14px 16px", fontWeight:600, fontSize:14 }}>
                   <div style={{ display:"flex", alignItems:"center", gap:10 }}>
                     {exp.imageUrl && <img src={exp.imageUrl} alt="" style={{ width:32, height:32, borderRadius:6, objectFit:"cover", border:"1px solid #EBEBEB" }}/>}
                     {exp.empresa || <span style={{ color:"#ccc" }}>—</span>}
@@ -257,6 +298,27 @@ export default function App() {
                 <input ref={fileRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>handleFile(e.target.files[0])}/>
               </div>
               <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+                <div>
+                  <label style={{fontSize:11,fontWeight:700,color:"#888",textTransform:"uppercase",letterSpacing:"0.08em",display:"block",marginBottom:6}}>Responsável</label>
+                  <select value={form.responsavel} onChange={e => { if (e.target.value === "__novo__") { setShowAddUser(true); } else { setForm(f=>({...f,responsavel:e.target.value})); setShowAddUser(false); } }}
+                    style={{width:"100%",border:"1.5px solid #EBEBEB",borderRadius:8,padding:"10px 12px",fontSize:14,background:"#F7F7F5",outline:"none"}}>
+                    <option value="">Selecione o responsável...</option>
+                    {users.map(u => <option key={u} value={u}>{u}</option>)}
+                    <option value="__novo__">+ Adicionar novo nome</option>
+                  </select>
+                  {showAddUser && (
+                    <div style={{display:"flex",gap:8,marginTop:8}}>
+                      <input value={newUserName} onChange={e=>setNewUserName(e.target.value)}
+                        placeholder="Digite o nome..."
+                        onKeyDown={e=>e.key==="Enter"&&handleAddUser()}
+                        style={{flex:1,border:"1.5px solid #C8F135",borderRadius:8,padding:"9px 12px",fontSize:14,outline:"none",background:"#F9FFE6"}}/>
+                      <button onClick={handleAddUser}
+                        style={{background:"#1A1A1A",color:"#C8F135",border:"none",borderRadius:8,padding:"9px 16px",fontWeight:700,fontSize:13,cursor:"pointer"}}>
+                        Adicionar
+                      </button>
+                    </div>
+                  )}
+                </div>
                 <Field label="Empresa" value={form.empresa} onChange={v=>setForm(f=>({...f,empresa:v}))} placeholder="Nome do estabelecimento"/>
                 <Field label="CNPJ" value={form.cnpj} onChange={v=>setForm(f=>({...f,cnpj:v}))} placeholder="00.000.000/0000-00" mono/>
                 <div style={{display:"flex",gap:12}}>
