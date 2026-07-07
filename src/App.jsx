@@ -32,15 +32,11 @@ async function extractReceiptData(imageBase64, mediaType) {
   const response = await fetch("/api/extract", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-6",
-      max_tokens: 1000,
-      messages: [{ role: "user", content: [
-        { type: "image", source: { type: "base64", media_type: mediaType, data: imageBase64 } },
-        { type: "text", text: "Analise este comprovante fiscal brasileiro e extraia APENAS os seguintes dados em formato JSON puro (sem markdown):\n{\"valor\": \"35.00\", \"data\": \"DD/MM/YYYY\", \"cnpj\": \"00.000.000/0000-00\", \"empresa\": \"nome\"}\nSe algum campo nao for encontrado, deixe como string vazia. Responda SOMENTE com o JSON." }
-      ]}]
-    })
+    body: JSON.stringify({ image: imageBase64, mediaType })
   });
+  const data = await response.json();
+  return data;
+}
   const data = await response.json();
   const text = data.content?.find(b => b.type === "text")?.text || "{}";
   return JSON.parse(text.replace(/```json|```/g, "").trim());
