@@ -21,8 +21,6 @@ const formatCurrency = (val) => {
 };
 
 export default async function handler(req, res) {
-  if (req.method !== 'POST' && req.method !== 'GET') return res.status(405).end();
-
   try {
     const raw = await kv('get', 'expenses');
     const expenses = raw ? JSON.parse(raw) : [];
@@ -43,31 +41,3 @@ export default async function handler(req, res) {
     });
 
     if (doMesPassado.length === 0) {
-      return res.status(200).json({ ok: true, message: 'Nenhum comprovante no mês anterior.' });
-    }
-
-    const total = doMesPassado.reduce((s, e) => s + parseFloat(e.valor || 0), 0);
-
-    const porResponsavel = {};
-    doMesPassado.forEach(e => {
-      const nome = e.responsavel || "Sem responsável";
-      if (!porResponsavel[nome]) porResponsavel[nome] = { total: 0, count: 0 };
-      porResponsavel[nome].total += parseFloat(e.valor || 0);
-      porResponsavel[nome].count++;
-    });
-
-    const resumoLinhas = Object.entries(porResponsavel).map(([nome, data]) => `
-      <tr>
-        <td style="padding:10px 16px;font-weight:600">${nome}</td>
-        <td style="padding:10px 16px;color:#555">${data.count} comprovante${data.count !== 1 ? "s" : ""}</td>
-        <td style="padding:10px 16px;text-align:right;font-weight:700">${formatCurrency(data.total)}</td>
-      </tr>
-    `).join("");
-
-    const tabelaLinhas = doMesPassado.map(e => `
-      <tr>
-        <td style="padding:8px 12px">${e.responsavel || "—"}</td>
-        <td style="padding:8px 12px">${e.empresa || "—"}</td>
-        <td style="padding:8px 12px;font-family:monospace;font-size:11px">${e.cnpj || "—"}</td>
-        <td style="padding:8px 12px">${e.data || "—"}</td>
-        <td
