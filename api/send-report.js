@@ -1,4 +1,4 @@
-const nodemailer = require('nodemailer');
+import nodemailer from 'nodemailer';
 
 const BASE_URL = process.env.KV_REST_API_URL;
 const TOKEN = process.env.KV_REST_API_TOKEN;
@@ -20,7 +20,7 @@ const formatCurrency = (val) => {
   return num.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 };
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   if (req.method !== 'POST' && req.method !== 'GET') return res.status(405).end();
 
   try {
@@ -35,14 +35,10 @@ module.exports = async function handler(req, res) {
     const doMesPassado = expenses.filter(e => {
       if (!e.data) return false;
       const p1 = e.data.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-      if (p1) {
-        return parseInt(p1[2]) - 1 === lastMonth.getMonth() && parseInt(p1[3]) === ano;
-      }
+      if (p1) return parseInt(p1[2]) - 1 === lastMonth.getMonth() && parseInt(p1[3]) === ano;
       const months = { JAN:0,FEV:1,MAR:2,ABR:3,MAI:4,JUN:5,JUL:6,AGO:7,SET:8,OUT:9,NOV:10,DEZ:11 };
       const p2 = e.data.match(/^(\d{2})\/([A-Za-z]{3})\/(\d{4})$/);
-      if (p2) {
-        return months[p2[2].toUpperCase()] === lastMonth.getMonth() && parseInt(p2[3]) === ano;
-      }
+      if (p2) return months[p2[2].toUpperCase()] === lastMonth.getMonth() && parseInt(p2[3]) === ano;
       return false;
     });
 
@@ -52,7 +48,6 @@ module.exports = async function handler(req, res) {
 
     const total = doMesPassado.reduce((s, e) => s + parseFloat(e.valor || 0), 0);
 
-    // Totais por responsável
     const porResponsavel = {};
     doMesPassado.forEach(e => {
       const nome = e.responsavel || "Sem responsável";
@@ -75,82 +70,4 @@ module.exports = async function handler(req, res) {
         <td style="padding:8px 12px">${e.empresa || "—"}</td>
         <td style="padding:8px 12px;font-family:monospace;font-size:11px">${e.cnpj || "—"}</td>
         <td style="padding:8px 12px">${e.data || "—"}</td>
-        <td style="padding:8px 12px;text-align:right;font-weight:600">${formatCurrency(e.valor)}</td>
-        <td style="padding:8px 12px">${e.motivo || "—"}</td>
-      </tr>
-    `).join("");
-
-    const html = `
-      <!DOCTYPE html>
-      <html lang="pt-BR">
-      <head><meta charset="UTF-8"/></head>
-      <body style="font-family:Arial,sans-serif;color:#1A1A1A;max-width:800px;margin:0 auto;padding:32px">
-        <div style="background:#1A1A1A;padding:24px 32px;border-radius:12px;margin-bottom:24px">
-          <div style="color:#C8F135;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.15em;margin-bottom:4px">Gestão de Despesas</div>
-          <div style="color:#fff;font-size:22px;font-weight:800">Fechamento — ${mesNome} ${ano}</div>
-        </div>
-
-        <p style="font-size:15px;margin-bottom:24px">Olá Diego, segue o fechamento de reembolsos referente a <strong>${mesNome} ${ano}</strong>. Por favor, efetue os pagamentos aos sócios abaixo.</p>
-
-        <h2 style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#888;margin-bottom:10px">Totais por responsável</h2>
-        <table style="width:100%;border-collapse:collapse;margin-bottom:28px;border-radius:8px;overflow:hidden">
-          <thead>
-            <tr style="background:#1A1A1A">
-              <th style="padding:10px 16px;text-align:left;color:#C8F135;font-size:11px;text-transform:uppercase">Responsável</th>
-              <th style="padding:10px 16px;text-align:left;color:#C8F135;font-size:11px;text-transform:uppercase">Comprovantes</th>
-              <th style="padding:10px 16px;text-align:right;color:#C8F135;font-size:11px;text-transform:uppercase">Total</th>
-            </tr>
-          </thead>
-          <tbody>${resumoLinhas}</tbody>
-        </table>
-
-        <h2 style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#888;margin-bottom:10px">Todos os comprovantes</h2>
-        <table style="width:100%;border-collapse:collapse;margin-bottom:28px">
-          <thead>
-            <tr style="background:#333">
-              <th style="padding:8px 12px;text-align:left;color:#fff;font-size:11px">Responsável</th>
-              <th style="padding:8px 12px;text-align:left;color:#fff;font-size:11px">Empresa</th>
-              <th style="padding:8px 12px;text-align:left;color:#fff;font-size:11px">CNPJ</th>
-              <th style="padding:8px 12px;text-align:left;color:#fff;font-size:11px">Data</th>
-              <th style="padding:8px 12px;text-align:right;color:#fff;font-size:11px">Valor</th>
-              <th style="padding:8px 12px;text-align:left;color:#fff;font-size:11px">Motivo</th>
-            </tr>
-          </thead>
-          <tbody>${tabelaLinhas}</tbody>
-        </table>
-
-        <div style="background:#1A1A1A;color:#C8F135;padding:16px 24px;border-radius:8px;text-align:right;font-size:18px;font-weight:800">
-          Total geral: ${formatCurrency(total)}
-        </div>
-
-        <p style="font-size:12px;color:#aaa;margin-top:24px">Este email foi gerado automaticamente pelo sistema de Comprovantes Fiscais BAUC.</p>
-      </body>
-      </html>
-    `;
-
-    const transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port: parseInt(process.env.SMTP_PORT),
-      secure: false,
-      requireTLS: true,
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS
-      }
-    });
-
-    await transporter.sendMail({
-      from: `"Comprovantes BAUC" <${process.env.EMAIL_FROM}>`,
-      to: process.env.EMAIL_TO,
-      cc: process.env.EMAIL_CC,
-      subject: `Reembolsos pendentes — ${mesNome} ${ano}`,
-      html
-    });
-
-    res.status(200).json({ ok: true, message: `Email enviado para ${process.env.EMAIL_TO}` });
-
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: err.message });
-  }
-};
+        <td
